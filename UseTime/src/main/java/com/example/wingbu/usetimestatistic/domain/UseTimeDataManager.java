@@ -8,9 +8,6 @@ import android.os.Build;
 import android.text.format.DateUtils;
 import android.util.Log;
 
-import com.example.wingbu.usetimestatistic.event.MessageEvent;
-import com.example.wingbu.usetimestatistic.event.MsgEventBus;
-import com.example.wingbu.usetimestatistic.event.TimeEvent;
 import com.example.wingbu.usetimestatistic.utils.DateTransUtils;
 import com.example.wingbu.usetimestatistic.utils.EventUtils;
 
@@ -21,14 +18,12 @@ import java.util.ArrayList;
 
 /**
  * 主要的数据操作的类
- *
- * Created by Wingbu on 2017/7/18.
  */
 
 public class UseTimeDataManager {
-    public static final String TAG = "Wingbu";
+    public static final String TAG = "UseTimeDataManager";
 
-    private static UseTimeDataManager               mUseTimeDataManager;
+    private static UseTimeDataManager mUseTimeDataManager;
 
     private Context                                 mContext;
 
@@ -41,18 +36,32 @@ public class UseTimeDataManager {
     private ArrayList<UsageEvents.Event>            mEventListChecked;
     private ArrayList<UsageStats>                   mStatsList;
 
-    //记录打开一次应用，使用的activity详情
-    private ArrayList<OneTimeDetails>               mOneTimeDetailList = new ArrayList<>();
+    //应用开启次数集合，记录打开一次应用，使用的activity详情
+    //  getPkgOneTimeDetailList ---> getOneTimeDetailEventList
+    // TODO: 2021/3/31
+    private ArrayList<OneTimeDetails> mOneTimeDetailList = new ArrayList<>();
 
     //记录某一次打开应用的使用情况（查询某一次使用情况的时候，用于界面显示）
     private OneTimeDetails                          mOneTimeDetails;
 
     //主界面数据
-    private ArrayList<PackageInfo>               mPackageInfoList = new ArrayList<>();
+    // 当前开启了哪些应用
+    // （开启时间排序；开启次数排序）
+    // 开启时间排序:  getmPackageInfoListOrderByTime
+    // 开启次数排序:  getmPackageInfoListOrderByCount
+    // TODO: 2021/3/31
+    private ArrayList<PackageInfo> mPackageInfoList = new ArrayList<>();
 
 
     public UseTimeDataManager(Context context) {
         this.mContext = context;
+        init();
+
+    }
+
+    private void init() {
+
+        refreshData(0);
     }
 
     public static UseTimeDataManager getInstance(Context context){
@@ -77,11 +86,11 @@ public class UseTimeDataManager {
         mStatsList = getUsageList(dayNumber);
 
         if(mEventList == null  || mEventList.size() == 0){
-            MsgEventBus.getInstance().post(new MessageEvent("未查到events"));
+            //MsgEventBus.getInstance().post(new MessageEvent("未查到events"));
             Log.i(TAG," UseTimeDataManager-refreshData()   未查到events" );
 
             if(mStatsList == null  || mStatsList.size() == 0){
-                MsgEventBus.getInstance().post(new MessageEvent("未查到stats"));
+               // MsgEventBus.getInstance().post(new MessageEvent("未查到stats"));
                 Log.i(TAG," UseTimeDataManager-refreshData()   未查到stats" );
                 return 2;
             }
@@ -94,7 +103,6 @@ public class UseTimeDataManager {
         refreshOneTimeDetailList(0);
         refreshPackageInfoList();
 
-        sendEventBus();
         return 0;
     }
 
@@ -102,6 +110,7 @@ public class UseTimeDataManager {
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     public void refreshPackageInfoList() {
         mPackageInfoList.clear();
+        Log.d(TAG, "refreshPackageInfoList:  mStatsList.size()="+ mStatsList.size());
         for (int i = 0 ; i < mStatsList.size() ; i++){
             PackageInfo info = new PackageInfo(0,calculateUseTime(mStatsList.get(i).getPackageName()),mStatsList.get(i).getPackageName());
             mPackageInfoList.add(info);
@@ -118,6 +127,7 @@ public class UseTimeDataManager {
     }
 
     //按照使用时间的长短进行排序，获取应用使用情况列表
+    // TODO: 2021/3/31  
     public ArrayList<PackageInfo> getmPackageInfoListOrderByTime() {
         Log.i(TAG," UseTimeDataManager-getmPackageInfoListOrderByTime()   排序前：mPackageInfoList.size()" + mPackageInfoList.size());
 
@@ -136,6 +146,7 @@ public class UseTimeDataManager {
     }
 
     //按照使用次数的多少进行排序，获取应用使用情况列表
+    // TODO: 2021/3/31
     public ArrayList<PackageInfo> getmPackageInfoListOrderByCount() {
         Log.i(TAG," UseTimeDataManager-getmPackageInfoListOrderByCount()   排序前：mPackageInfoList.size()" + mPackageInfoList.size());
 
@@ -153,25 +164,10 @@ public class UseTimeDataManager {
         return mPackageInfoList;
     }
 
-    @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    private void sendEventBus(){
-        TimeEvent event = new TimeEvent(0,0);
-        if(mEventListChecked != null && mEventListChecked.size() > 0){
-            event.setmStartTime(mEventListChecked.get(0).getTimeStamp());
-            event.setmEndTime(mEventListChecked.get(mEventListChecked.size()-1).getTimeStamp());
-        }
-        MsgEventBus.getInstance().post(event);
-    }
-
     //从系统中获取event数据
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private ArrayList<UsageEvents.Event>  getEventList(int dayNumber){
         ArrayList<UsageEvents.Event> mEventList = new ArrayList<>();
-//        Calendar calendar = Calendar.getInstance();
-//        long endTime = calendar.getTimeInMillis();
-//        calendar.add(Calendar.YEAR, -1);
-//        //long startTime = calendar.getTimeInMillis()- 3 * DateTransUtils.DAY_IN_MILLIS;
-//        long startTime = calendar.getTimeInMillis();
 
         long endTime = 0,startTime = 0;
         if(dayNumber == 0 ){
@@ -215,7 +211,7 @@ public class UseTimeDataManager {
     private ArrayList<UsageEvents.Event> getEventListCheckWithoutErrorData(){
         ArrayList<UsageEvents.Event> mList = new ArrayList<>();
         for(int i = 0; i < mEventList.size() ; i++){
-            if(mEventList.get(i).getEventType() == 1 || mEventList.get(i).getEventType() == 2){
+            if(mEventList.get(i).getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND || mEventList.get(i).getEventType() == UsageEvents.Event.MOVE_TO_BACKGROUND){
                 mList.add(mEventList.get(i));
             }
         }
@@ -241,7 +237,7 @@ public class UseTimeDataManager {
         ArrayList<UsageEvents.Event> list = new ArrayList();
         for (int i = startIndex ; i < mEventListChecked.size() ; i++){
             if( i == startIndex ){
-                if(mEventListChecked.get(i).getEventType() == 2){
+                if(mEventListChecked.get(i).getEventType() == UsageEvents.Event.MOVE_TO_BACKGROUND){
                     Log.i(TAG,"  refreshOneTimeDetailList()     warning : 每次打开一个app  第一个activity的类型是 2     ");
                 }
                 pkg = mEventListChecked.get(i).getPackageName();
@@ -268,7 +264,7 @@ public class UseTimeDataManager {
 //        endTime   = list.get( list.size() - 1 ).getTimeStamp();
         Log.i(TAG,"   mEventListChecked 分类:  本次启动的包名："+list.get(0).getPackageName()+ "   时间：" + DateUtils.formatSameDayTime(list.get(0).getTimeStamp(), System.currentTimeMillis(), DateFormat.MEDIUM, DateFormat.MEDIUM));
         for(int i = 1 ; i < list.size() ; i += 2){
-            if(list.get(i).getEventType() == 2 && list.get( i - 1).getEventType() == 1 ){
+            if(list.get(i).getEventType() == UsageEvents.Event.MOVE_TO_BACKGROUND && list.get( i - 1).getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND ){
                 totalTime += ( list.get(i).getTimeStamp() - list.get( i - 1).getTimeStamp());
             }
         }
@@ -284,7 +280,8 @@ public class UseTimeDataManager {
     }
 
 
-    // 展示 应用开启次数
+    // 根据包名 展示 应用开启次数
+    // TODO: 2021/3/31
     public ArrayList<OneTimeDetails> getPkgOneTimeDetailList(String pkg){
 
         if("all".equals(pkg)){
@@ -310,13 +307,13 @@ public class UseTimeDataManager {
         boolean isCheckAgain = false ;
         for (int i = 0 ; i < list.size() - 1 ; i += 2){
             if(list.get(i).getClassName().equals(list.get(i+1).getClassName())){
-                if(list.get(i).getEventType() != 1){
+                if(list.get(i).getEventType() != UsageEvents.Event.MOVE_TO_FOREGROUND){
                     Log.i(UseTimeDataManager.TAG,"   EventList 出错  ： "+list.get(i).getPackageName() +"  "+ DateUtils.formatSameDayTime(list.get(i).getTimeStamp(), System.currentTimeMillis(), DateFormat.MEDIUM, DateFormat.MEDIUM).toString());
                     list.remove(i);
                     isCheckAgain = true;
                     break;
                 }
-                if(list.get(i+1).getEventType() != 2){
+                if(list.get(i+1).getEventType() != UsageEvents.Event.MOVE_TO_BACKGROUND){
                     Log.i(UseTimeDataManager.TAG,"   EventList 出错 ： "+list.get(i+1).getPackageName() +"  "+ DateUtils.formatSameDayTime(list.get(i+1).getTimeStamp(), System.currentTimeMillis(), DateFormat.MEDIUM, DateFormat.MEDIUM).toString());
                     list.remove(i);
                     isCheckAgain = true;

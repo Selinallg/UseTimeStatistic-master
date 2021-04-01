@@ -61,7 +61,7 @@ public class DateTransUtils {
     //获取最近7天的日期,用于查询这7天的系统数据
     public static ArrayList<String> getSearchDays(){
         ArrayList<String> dayList = new ArrayList<>();
-        for(int i = 0 ; i < 7 ; i++){
+        for(int i = 0 ; i < 1 ; i++){
             dayList.add(getDateString(i));
         }
         return dayList;
